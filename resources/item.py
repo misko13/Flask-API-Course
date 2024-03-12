@@ -2,8 +2,12 @@ import uuid
 from flask import request
 from flask.views import MethodView
 from flask_smorest import Blueprint, abort
+from sqlalchemy.exc import SQLAlchemyError  # Exceptions used with SQLAlchemy.
 
-from db import items, stores
+from db import db
+from models import ItemModel # __init__.py id important
+from schemas import ItemSchema, ItemUpdateSchema
+#from db import items
 
 #----------------------------------------------------------------------------------------------
 
@@ -14,69 +18,64 @@ blp = Blueprint("Items", __name__,  description="Operations on items")
 #----------------------------------------------------------------------------------------------
 
 @blp.route("/item/<string:item_id>")  #connect flask smorest with class Store bellow, so API runs the dinctions inside
-class Item(MethodView): #class Store inherits from a methodView    
+class Item(MethodView): #class Store inherits from a methodView   
+    """ITEM READ from db record --> db.session.add(item)""" 
+    @blp.response(200, ItemSchema) # response deffinition  (includes dump_only and required from schema too into a response)
     def get(self, item_id):
-        try:
-            return items[item_id]
-        except KeyError:
-            abort(404, message="Item not found!") # we use Abort function from flask_smorest ..i
-
-   
+        item = ItemModel.query.get_or_404(item_id)   # Query.get but aborts with a 404 Not Found error instead of returning None. !! The primary key to query !!
+        return item
+    
+    """ITEM DELETE from db record --> """   
     def delete(self, item_id):
-        try:
-            del items[item_id]
-            return{ "message":"Item deleted!"}
-        except KeyError:
-            abort(404, message="Item not found!") # we use Abort function from flask_smorest ..
+        item = ItemModel.query.get_or_404(item_id) 
+        db.session.delete(item)
+        db.session.commit()
+        #raise NotImplementedError("Delete not implemented")
+        return {"message": "Item deleted"}
 
-    def put(self, item_id):
-        item_data = request.get_json()
-        if(  "price" not in item_data or "name" not in item_data ):
-            abort(  400,  message="Bad request. Ensure 'price'  and 'name' are included inside a JSON payload. "  )
-        try:
-            item = items[item_id]   # item here is a dictionary
-            #   | operaror permos merge (replace corresponding data) on two distionaries
-            item |= item_data
-            return item
-        except KeyError:
-            abort(404, message="Item not found!")
+    """ITEM UPDATE in db record --> """  
+    @blp.arguments(ItemUpdateSchema)
+    @blp.response(200, ItemSchema)  #respomse decorator must be AFTER arguments decorator
+    def put(self, item_data , item_id ): # arguments decorator must be first after root (self)
+        item = ItemModel.query.get(item_id) 
+        if item:  # true if Item Exists we need to update only price and name
+            item.price = item_data["price"]
+            item.name = item_data["name"]
+        else: #New item , also store Id mist be pass
+            item = ItemModel(id=item_id, **item_data)
+
+        db.session.add(item)
+        db.session.commit()
+
+        return item
 
                 
 #----------------------------------------------------------------------------------------------
 
 @blp.route("/item")  
 class ItemList(MethodView): #class Store inherits from a methodView    
+    """ITEM LIST ALL in db record --> """ 
+    @blp.response(200, ItemSchema(many=True))  # after validation gives us a list sutible for return in function
     def get(self):
         #return("Hello word!")
-        return {"items": list(items.values())}  #for JSON we need to convert Dict to List
 
-        
-    def post(self):
-        item_data = request.get_json()  # recived json converted in dictionary then item = { **item_data, "id": item_id  } will pass  coinstruct params for a new dict ionsert
-        # we need to validate if data exist and if the data is of right type
-        if (
-            "price" not in item_data
-            or "store_id" not in item_data
-            or "name" not in item_data 
-        ):
-            abort(
-                400,  
-                message="Bad request. Ensure 'price' , 'store' and 'name' are included inside a JSON payload. "
-            )
-        
-        #check if item is already present in same store
-        for item in items.values():
-            if(
-                item_data["name"] == item["name"]
-                and item_data["store_id"] == item["store_id"]
-            ):
-                abort( 400, message="Item already exists "  )
+        #return {"items": list(items.values())}  #for JSON we need to convert Dict to List , this is OBJECT {} of items
+        return ItemModel.query.all()
 
-        #check if sore is present
-        if item_data["store_id"] not in stores:
-            abort(404, message="Store not found!") # we use Abort function from flask_smorest ..i
-    
-        item_id = uuid.uuid4().hex # generated string
-        item = { **item_data, "id": item_id  } #**store_data unpaks item_data Dictionary and saves into new dict. 
-        items[item_id] = item #insert a item (dictionary) inside a items Dict having  store_id 
-        return item, 201  #status code
+    """ITEM CREATE record --> db.session.add(item)"""
+    @blp.arguments(ItemSchema)   #here we DECORATED the metod with ItemSchema defined in schemas.py  for data valadation
+    @blp.response(201, ItemSchema)
+    def post(self, item_data): #++ item_data  ++  will be passsed after validation from ItemSchema
+        # OLD before database.. item_data = request.get_json()  # recived json converted in dictionary
+        #    then item = { **item_data, "id": item_id  } will pass  coinstruct params for a new dict insert
+      
+        item = ItemModel(**item_data) #**store_data unpaks item_data Dictionary and saves into new dict .. passing to ItemModel
+                                    
+        try:
+            db.session.add(item)
+            db.session.commit() #writte to db occures
+        except  SQLAlchemyError:
+            abort(500, message="Error: Item not inserted!")
+
+
+        return item  #status code

@@ -2,60 +2,68 @@ import uuid
 from flask import request
 from flask.views import MethodView
 from flask_smorest import Blueprint, abort
+from sqlalchemy.exc import SQLAlchemyError, IntegrityError  # Exceptions used with SQLAlchemy.
 
-from db import stores
+from db import db
+from models import StoreModel # __init__.py id important
+from schemas import StoreSchema
+
+#from db import stores
 
 #----------------------------------------------------------------------------------------------
 
 """Blueprint Devides flask api in segments"""
 blp = Blueprint("stores", __name__ , description="Operations on stores")
 
+
 @blp.route("/store/<string:store_id>")  #connect flask smorest with class Store bellow, so API runs the dinctions inside
 class Store(MethodView): #class Store inherits from a methodView
+    
+    """STORE READ from db record --> """   
+    @blp.response(200, StoreSchema) #we serialize using store schema
     def get(self, store_id):
-        try:
-            return stores[store_id]
-        except KeyError:
-            abort(404, message="Store not found!") 
+        store = StoreModel.query.get_or_404(store_id)   # Query.get but aborts with a 404 Not Found error instead of returning None. !! The primary key to query !!
+        return store #returns object
    
-   
+    
+    """STORE DELETE from db record --> """   
     def delete(self, store_id):
-        try:
-            del stores[store_id]
-            return{ "message":"Store deleted!"}
-        except KeyError:
-            abort(404, message="Store not found!") # we use Abort function from flask_smorest ..
-
-
+        store = StoreModel.query.get_or_404(store_id)
+        db.session.delete(store)
+        db.session.commit
+        #raise NotImplementedError("Delete not implemented")
+        return {"messasge": "strore deleted"}
+    
 
 #----------------------------------------------------------------------------------------------
             
 @blp.route("/store")  #connect flask smorest with class Store bellow, so API runs the dinctions inside
 class StoreList(MethodView): #class Store inherits from a methodView
+    """STORE LIST ALL in db record --> """ 
+    @blp.response(200, StoreSchema(many=True))
     def get(self):
-        return {"stores":list(stores.values())} 
-   
-   
-    def post(self):
-        store_data = request.get_json()  # will convert JSON string data into a Python Dictionary
-        # validate name is inside Json
-        if "name" not in store_data:
+        return StoreModel.query.all()
+    
+
+    """STORE CREATE record --> db.session.add(store)  """
+    @blp.arguments(StoreSchema)
+    @blp.response(200, StoreSchema)
+    def post(self, store_data):  #store_data insert that is passed from Store_schema validator
+
+        store = StoreModel(**store_data) #**store_data unpaks store_data Dictionary and saves into new dict .. passing to StoreModel
+                                    
+        try:
+            db.session.add(store)
+            db.session.commit() #writte to db occures
+        except  IntegrityError: #rised if srore already exists
             abort(
-                400,  
-                message="Bad request. Ensure  'name' is included inside a JSON payload. "
+                400,
+                message="Error: Store esistente!"
+
             )
-        #validate store is not prsenet
-        for store  in stores.values():
-            if(
-                store_data["name"] == store["name"]
-                and store_data["store_id"] == store["store_id"]
-            ):
-                abort( 400, message=f"Item already exists "  )    
-
-        store_id = uuid.uuid4().hex # generated string
-        store = { **store_data, "id": store_id  } #**store_data unpaks stora data dict. and includ it inside a new dictionary
-        stores[store_id] = store #insert a store (dictionary) inside a stores Dict in store_id 
-
-        return store, 201  #status code
+        except  SQLAlchemyError:
+            abort(500, message="Error: Store not inserted!")
+        
+        return store  #status code
     
    
