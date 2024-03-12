@@ -9,4 +9,5 @@ class StoreModel(db.Model): # maps row in table with python class
     name = db.Column(db.String(80), unique=True, nullable = False )
     items = db.relationship( 
         "ItemModel", back_populates="store", lazy="dynamic", cascade="all, delete"
-    ) # lazy="dynamic" = no prefetch
+    ) 
+    # lazy="dynamic" = no prefetch, cascade will delete all depending data
