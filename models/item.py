@@ -11,5 +11,7 @@ class ItemModel(db.Model): # maps row in table with python class
          db.Integer, db.ForeignKey("stores.id"), unique=False, nullable = False
     )#  !! 1:n relationship by foreign key, cheks relations in integrity
     store = db.relationship("StoreModel", back_populates = "items" ) #SQLAlchemy knows how to populate the key
+    tags = db.relationship("TagModel", back_populates="items", secondary="items_tags")
+    
 
 
