@@ -1,0 +1,7 @@
+.venv
+.vagrant
+__pycache__
+*.sql
+*.pyc 
+.DS_Store
+

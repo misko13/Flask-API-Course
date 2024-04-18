@@ -24,6 +24,7 @@ class PlainTagSchema(Schema):
 class ItemSchema(PlainItemSchema):  # inherits - extends PlainItemSchema
     store_id = fields.Int(required=True, load_only=True) # we pass store_id when RTECEIVING data from the client
     store = fields.Nested(PlainStoreSchema(), dump_only=True) #nested other schema inside - only for RETURNING data to the client
+    tags = fields.List(fields.Nested(PlainTagSchema()), dump_only=True)
 
 class StoreSchema(PlainStoreSchema): # inherits - extends PlainStoreSchema
         items = fields.List(fields.Nested(PlainItemSchema()), dump_only=True)  # StoreShena is after ItemSchema as it nesting this
@@ -40,3 +41,8 @@ class TagAndItemSchema(Schema):
     message = fields.Str()
     item = fields.Nested(ItemSchema)
     tag = fields.Nested(TagSchema)
+
+class UsersSchema(Schema):
+     id = fields.Int(dump_only = True) #ID  we will never receve this from outside, 
+     username = fields.Str(required=True)
+     password = fields.Str(required=True, load_only=True) #load_only - this will asure we NEVER return user password back

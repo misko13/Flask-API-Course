@@ -16,7 +16,7 @@ from schemas import StoreSchema
 blp = Blueprint("stores", __name__ , description="Operations on stores")
 
 
-@blp.route("/store/<string:store_id>")  #connect flask smorest with class Store bellow, so API runs the dinctions inside
+@blp.route("/store/<int:store_id>")  #connect flask smorest with class Store bellow, so API runs the dinctions inside
 class Store(MethodView): #class Store inherits from a methodView
     
     """STORE READ from db record --> """   

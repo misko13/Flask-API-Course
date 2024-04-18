@@ -9,7 +9,7 @@ from schemas import TagSchema, TagAndItemSchema
 blp = Blueprint("Tags", "tags", description="Operations on tags")
 
 #-----------------------TAG IN STORE-----------------------------------------------------
-@blp.route("/store/<string:store_id>/tag")
+@blp.route("/store/<int:store_id>/tag")
 class TagsInStore(MethodView):
     
     """GET ALL TAGS"""
@@ -40,14 +40,16 @@ class TagsInStore(MethodView):
         return tag
 
 #-----------------------TAG id TO ITEM id-----------------------------------------------------
-@blp.route("/item/<string:item_id>/tag/<string:tag_id>")
+@blp.route("/item/<int:item_id>/tag/<int:tag_id>")
 class LinkTagsToItem(MethodView):
+    """ LINK ITEM TO A TAG"""
     @blp.response(201, TagSchema)
     def post(self, item_id, tag_id):
+        #FIND ITEM AND TAG SO WE KNOW THEY EXIST
         item = ItemModel.query.get_or_404(item_id)
         tag = TagModel.query.get_or_404(tag_id)
 
-        item.tags.append(tag)
+        item.tags.append(tag) #TAGS is a list
 
         try:
             db.session.add(item)
@@ -56,7 +58,8 @@ class LinkTagsToItem(MethodView):
             abort(500, message="An error occurred while inserting the tag.")
 
         return tag
-
+    
+    """ DELETE LINK ITEM FROM A TAG / UNLINK"""
     @blp.response(200, TagAndItemSchema)
     def delete(self, item_id, tag_id):
         item = ItemModel.query.get_or_404(item_id)
@@ -73,7 +76,7 @@ class LinkTagsToItem(MethodView):
         return {"message": "Item removed from tag", "item": item, "tag": tag}
 
 #-----------------------TAG OPERATIONS-----------------------------------------------------
-@blp.route("/tag/<string:tag_id>")
+@blp.route("/tag/<int:tag_id>")
 class Tag(MethodView):
 
     """GET SPECIFIC TAG"""
@@ -82,20 +85,26 @@ class Tag(MethodView):
         tag = TagModel.query.get_or_404(tag_id)
         return tag
 
+    """DELETE A  SPECIFIC TAG"""
+    #Definition of main response
     @blp.response(
         202,
         description="Deletes a tag if no item is tagged with it.",
         example={"message": "Tag deleted."},
     )
+
+    #Definition of alternative  response 1
     @blp.alt_response(404, description="Tag not found.")
+    
+    #Definition of alternative  response 2
     @blp.alt_response(
         400,
         description="Returned if the tag is assigned to one or more items. In this case, the tag is not deleted.",
     )
     def delete(self, tag_id):
-        tag = TagModel.query.get_or_404(tag_id)
+        tag = TagModel.query.get_or_404(tag_id) #find a tag
 
-        if not tag.items:
+        if not tag.items:  #delete only  if no itensa are connected (we need to chech they are the same store too)
             db.session.delete(tag)
             db.session.commit()
             return {"message": "Tag deleted."}
